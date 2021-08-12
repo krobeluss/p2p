@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30804.86
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "p2p", "p2p\p2p.csproj", "{FDF68EFE-D105-4DAD-91E1-4CD894993165}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D19DD406-9BE3-4F1A-9D25-C5F7E4408BF8}
+	EndGlobalSection
+EndGlobal
