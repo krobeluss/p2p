@@ -6,7 +6,7 @@ using System.Text;
 
 namespace P2P.Packets
 {
-    class AddressDissector : IPacketDissector
+    internal class AddressDissector : IPacketDissector
     {
         public byte[] Assembly(IPacketData packet)
         {

@@ -4,7 +4,7 @@ using System.Text;
 
 namespace P2P.Packets
 {
-    interface IPacketData
+    internal interface IPacketData
     {
         byte[] Assembly();
     }

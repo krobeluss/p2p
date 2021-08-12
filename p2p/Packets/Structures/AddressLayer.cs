@@ -5,7 +5,7 @@ using System.Text;
 
 namespace P2P.Packets.Structures
 {
-    abstract class AderssLayer : IPayloadablePacketData
+    internal abstract class AderssLayer : IPayloadablePacketData
     {
         public abstract byte[] Payload { get; set; }
 

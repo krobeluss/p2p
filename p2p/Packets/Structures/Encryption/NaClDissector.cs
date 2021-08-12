@@ -6,7 +6,7 @@ using System.Text;
 
 namespace P2P.Packets.Structures.Encryption
 {
-    class NaClDissector : EncryptionDissector
+    internal class NaClDissector : EncryptionDissector
     {
 
         private Curve25519XSalsa20Poly1305 cryptor;

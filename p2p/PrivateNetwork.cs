@@ -9,12 +9,6 @@ using System.Threading;
 
 namespace P2P
 {
-    struct NaCLKeyPair
-    {
-        public byte[] privateKey;
-        public byte[] publicKey;
-    }
-
     class PrivateNetwork : IDisposable 
     {
         private UdpClient socket;
@@ -134,6 +128,12 @@ namespace P2P
 
                 return network;
             }
+        }
+
+        private struct NaCLKeyPair
+        {
+            public byte[] privateKey;
+            public byte[] publicKey;
         }
     }
 }

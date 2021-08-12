@@ -5,7 +5,7 @@ using System.Text;
 
 namespace P2P.Packets.Structures
 {
-    class CommonDissector : IPacketDissector
+    internal class CommonDissector : IPacketDissector
     {
         public byte[] Assembly(IPacketData packet)
         {

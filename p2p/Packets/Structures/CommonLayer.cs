@@ -4,7 +4,7 @@ using System.Text;
 
 namespace P2P.Packets.Structures
 {
-    abstract class CommonLayer : IPacketData
+    internal abstract class CommonLayer : IPacketData
     {
         abstract public byte Header { get; }
 

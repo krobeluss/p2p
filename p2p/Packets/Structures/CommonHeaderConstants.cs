@@ -4,7 +4,7 @@ using System.Text;
 
 namespace P2P.Packets.Structures
 {
-    class CommonHeaderConstants
+    internal class CommonHeaderConstants
     {
         public const byte HELLO = 1;
         public const byte PING = 2;

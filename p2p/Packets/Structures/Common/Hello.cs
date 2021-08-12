@@ -5,7 +5,7 @@ using System.Text;
 
 namespace P2P.Packets.Structures.P2P
 {
-    class Hello : CommonLayer
+    internal class Hello : CommonLayer
     {
 
         private const int COMPRESSION_ENABLED = 1;

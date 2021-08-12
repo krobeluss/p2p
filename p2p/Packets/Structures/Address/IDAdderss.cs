@@ -5,7 +5,7 @@ using System.Text;
 
 namespace P2P.Packets.Structures.Address
 {
-    class IDAdderss : AderssLayer
+    internal class IDAdderss : AderssLayer
     {
         protected byte[] payload;
         private UInt32 fromID;
