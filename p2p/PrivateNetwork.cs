@@ -9,8 +9,13 @@ using System.Threading;
 
 namespace P2P
 {
-    class PrivateNetwork : IDisposable 
+    public class PrivateNetwork : IDisposable 
     {
+        // TODO Impliment config
+
+        const uint MAX_HELLO_ATTEMT = 30;
+
+
         private UdpClient socket;
 
         private CancellationTokenSource tokenSource = new CancellationTokenSource();
@@ -24,6 +29,8 @@ namespace P2P
         IPacketDissector adderssDissector = new AddressDissector();
 
         Timer helloTask;
+
+
         public void Dispose()
         {
             tokenSource.Cancel();
@@ -34,6 +41,7 @@ namespace P2P
 
         private void Run()
         {
+            helloTask = new Timer(SendHelloTask, this, 1000, 1000);
 
             while (!tokenSource.Token.IsCancellationRequested)
             {
@@ -47,38 +55,49 @@ namespace P2P
             }
         }
 
-        private void SendHello(object state)
+        private void SendHelloTask(object state)
         {
             lock(clients)
-            {            
+            {
                 foreach(var client in clients)
                 {
                     if(!client.Value.IsConnected)
                     {
-
+                        client.Value.PrepareHello();
                     }
                 }
             }
         }
 
+        internal void SendTo(byte[] data, IPEndPoint to)
+        {
+            IDAdderss adderssPacket = new IDAdderss();
+            adderssPacket.FromID = myID;
+            adderssPacket.Payload = data;
+
+            byte[] packet = adderssDissector.Assembly(adderssPacket);
+
+            socket.Send(packet, packet.Length, to);
+        }
+
         public void AddPeer(IPEndPoint endPoint, UInt32 peerID)
         {
+            //Todo refactoe me
+
             clients.Add(peerID, new RemoteClient(endPoint, endPoint, peerID));
         }
 
-
-
-        public class PrivateNetworkBuilder
+        public class Builder
         {
             PrivateNetwork network = new PrivateNetwork();
             IPEndPoint endPoint;
 
-            public PrivateNetworkBuilder()
+            public Builder()
             {
 
             }
 
-            public PrivateNetworkBuilder AddNaCl(byte[] privateKey, byte[] publicKey )
+            public Builder AddNaCl(byte[] privateKey, byte[] publicKey )
             {
                 network.keyPair = new NaCLKeyPair();
                 network.keyPair.publicKey = publicKey;
@@ -87,7 +106,7 @@ namespace P2P
                 return this;
             }
 
-            public PrivateNetworkBuilder AddNaCl()
+            public Builder AddNaCl()
             {
                 network.keyPair = new NaCLKeyPair();
                 Curve25519XSalsa20Poly1305.KeyPair(out network.keyPair.privateKey, out network.keyPair.publicKey);
@@ -95,14 +114,14 @@ namespace P2P
                 return this;
             }
 
-            public PrivateNetworkBuilder AddID(uint id)
+            public Builder AddID(uint id)
             {
                 network.myID = id;
 
                 return this;
             }
 
-            public PrivateNetworkBuilder AddBindAddress(IPEndPoint endPoint)
+            public Builder AddBindAddress(IPEndPoint endPoint)
             {
                 this.endPoint = endPoint;
 

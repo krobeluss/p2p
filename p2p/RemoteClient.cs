@@ -8,15 +8,14 @@ namespace P2P
 {
     internal class RemoteClient
     {
-        internal IPEndPoint externalAddress;
-        internal IPEndPoint internalAddress;
+        private IPEndPoint externalAddress;
+        private IPEndPoint internalAddress;
 
-        internal IPEndPoint correctAddress;
+        private IPEndPoint correctAddress;
         private PrivateNetwork network;
 
-        internal UInt32 remoteID;
-        internal int helloCount = 0;
-
+        private UInt32 remoteID;
+        private int helloCount = 0;
 
         public bool IsConnected
         {
@@ -33,7 +32,12 @@ namespace P2P
             this.remoteID = remoteID;
         }
 
-        public void ProcessPacket (IPayloadablePacketData packet)
+        public void ProcessPacket (IPayloadablePacketData packet, IPEndPoint from)
+        {
+
+        }
+
+        internal void PrepareHello()
         {
 
         }

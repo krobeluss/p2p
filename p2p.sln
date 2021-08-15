@@ -5,16 +5,45 @@ VisualStudioVersion = 16.0.30804.86
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "p2p", "p2p\p2p.csproj", "{FDF68EFE-D105-4DAD-91E1-4CD894993165}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "p2pClient", "p2pClient\p2pClient.csproj", "{32762DA8-E9CB-4F4F-921D-4A08149C8A44}"
+	ProjectSection(ProjectDependencies) = postProject
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165} = {FDF68EFE-D105-4DAD-91E1-4CD894993165}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Debug|x64.Build.0 = Debug|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Debug|x86.Build.0 = Debug|Any CPU
 		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Release|x64.ActiveCfg = Release|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Release|x64.Build.0 = Release|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Release|x86.ActiveCfg = Release|Any CPU
+		{FDF68EFE-D105-4DAD-91E1-4CD894993165}.Release|x86.Build.0 = Release|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Debug|x64.Build.0 = Debug|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Debug|x86.Build.0 = Debug|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Release|x64.ActiveCfg = Release|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Release|x64.Build.0 = Release|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Release|x86.ActiveCfg = Release|Any CPU
+		{32762DA8-E9CB-4F4F-921D-4A08149C8A44}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
