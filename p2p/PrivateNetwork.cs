@@ -1,4 +1,5 @@
 ﻿using NaCl;
+using P2P.Internal;
 using P2P.Packets;
 using P2P.Packets.Structures.Address;
 using System;
@@ -11,60 +12,62 @@ namespace P2P
 {
     public class PrivateNetwork : IDisposable 
     {
-        // TODO Impliment config
-
-        const uint MAX_HELLO_ATTEMT = 30;
-
-
         private UdpClient socket;
-
-        private CancellationTokenSource tokenSource = new CancellationTokenSource();
-
         private SortedDictionary<UInt32, RemoteClient> clients = new SortedDictionary<UInt32, RemoteClient>();
-
         private UInt32 myID;
+        private NaCLKeyPair keyPair;
+        private IPacketDissector adderssDissector = new AddressDissector();
+        private Timer helloTask;
 
-        NaCLKeyPair keyPair;
+        private IPEndPoint stunEndpoint;
 
-        IPacketDissector adderssDissector = new AddressDissector();
+        private IPEndPoint externalIP;
 
-        Timer helloTask;
+        bool isRunned;
 
+        public IPEndPoint ExternalIP { get => externalIP; set => externalIP = value; }
 
         public void Dispose()
         {
-            tokenSource.Cancel();
+            isRunned = true;
             socket.Close();
 
             helloTask.Dispose();
         }
 
-        private void Run()
+        private void ListenSocketThread()
         {
-            helloTask = new Timer(SendHelloTask, this, 1000, 1000);
+            helloTask = new Timer(SendHelloTimerTask, this, 1000, 1000);
 
-            while (!tokenSource.Token.IsCancellationRequested)
+            while (isRunned)
             {
                 IPEndPoint from = null;
-                var data = socket.Receive(ref from);
+                byte[] data = socket.Receive(ref from);
 
                 if (data.Length == 0)
                     continue;
+
+                if(from.Equals(this.stunEndpoint))
+                {
+                    IPEndPoint endPoint = STUNParser.ParseSTUNResponse(data);
+                    
+
+                }
 
                 IDAdderss adderss = (IDAdderss)adderssDissector.Dissect(data);
             }
         }
 
-        private void SendHelloTask(object state)
+        private void SendHelloTimerTask(object state)
         {
             lock(clients)
             {
                 foreach(var client in clients)
                 {
                     if(!client.Value.IsConnected)
-                    {
                         client.Value.PrepareHello();
-                    }
+                    
+                    // TODO Check hello attemts
                 }
             }
         }
@@ -85,6 +88,14 @@ namespace P2P
             //Todo refactoe me
 
             clients.Add(peerID, new RemoteClient(endPoint, endPoint, peerID));
+        }
+
+        public void GetExternalIP(IPEndPoint stunServer)
+        {
+            byte[] data = STUNParser.CreateStunRequest(new byte[12]);
+            socket.Send(data, data.Length, stunServer);
+
+            this.stunEndpoint = stunServer;
         }
 
         public class Builder
@@ -144,6 +155,11 @@ namespace P2P
                 byte[] inValue = new byte[] { 0 };
                 byte[] outValue = new byte[] { 0 };
                 network.socket.Client.IOControl(SIO_UDP_CONNRESET, inValue, outValue);
+
+                network.isRunned = true;
+
+                Thread thr = new Thread(network.ListenSocketThread);
+                thr.Start();
 
                 return network;
             }
