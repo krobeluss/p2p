@@ -1,4 +1,5 @@
 ﻿using NaCl;
+using P2P.Internal;
 using P2P.Packets;
 using P2P.Packets.Structures.Encryption;
 using P2P.Packets.Structures.P2P;
@@ -23,6 +24,8 @@ namespace P2P
         IPacketDissector commonDissector;
         IPacketDissector encryptionDissector;
 
+        NonceUtils nonceUtils;
+
         public bool IsConnected
         {
             get
@@ -38,9 +41,21 @@ namespace P2P
             this.remoteID = remoteID;
         }
 
-        public void ProcessPacket (IPayloadablePacketData packet, IPEndPoint from)
+        public void ProcessPacket(IPayloadablePacketData packet, IPEndPoint from)
         {
+            if (typeof(NaClDissector).IsInstanceOfType(this.encryptionDissector))
+            {
+                NaClPacket naClPacket = (NaClPacket)this.encryptionDissector.Dissect(packet.Payload);
 
+                if(this.nonceUtils.TrackNonce(naClPacket.Payload))
+                {
+                    // Парсим дальше пейлоад 
+                }
+                else
+                {
+                    // Нонс был использован
+                }
+            }
         }
 
         internal void PrepareHello()
@@ -62,8 +77,8 @@ namespace P2P
         {
             if(typeof(NaClDissector).IsInstanceOfType(this.encryptionDissector))
             {
-                NaClStructure naClPacket = new NaClStructure();
-                naClPacket.Nonce = new byte[Curve25519XSalsa20Poly1305.NonceLength]; // TODO
+                NaClPacket naClPacket = new NaClPacket();
+                naClPacket.Nonce = nonceUtils.GetNextNonce();
                 naClPacket.Payload = packetData;
 
                 return this.encryptionDissector.Assembly(naClPacket);

@@ -18,9 +18,9 @@ namespace P2P.Packets.Structures.Encryption
 
         public override byte[] Assembly(IPacketData packet)
         {
-            if(typeof(NaClStructure).IsInstanceOfType(packet) )
+            if(typeof(NaClPacket).IsInstanceOfType(packet) )
             {
-                NaClStructure naclPacket = (NaClStructure)packet;
+                NaClPacket naclPacket = (NaClPacket)packet;
                 byte[] data = new byte[Curve25519XSalsa20Poly1305.NonceLength + Curve25519XSalsa20Poly1305.TagLength + naclPacket.Payload.Length];
 
                 Array.Copy(naclPacket.Nonce, data, Curve25519XSalsa20Poly1305.NonceLength);
@@ -45,7 +45,7 @@ namespace P2P.Packets.Structures.Encryption
 
             if(success)
             {
-                NaClStructure structure = new NaClStructure();
+                NaClPacket structure = new NaClPacket();
                 structure.Nonce = nonce;
                 structure.Payload = message;
 

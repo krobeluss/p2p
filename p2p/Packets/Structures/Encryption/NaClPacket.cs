@@ -5,7 +5,7 @@ using System.Text;
 
 namespace P2P.Packets.Structures.Encryption
 {
-    internal class NaClStructure : IPayloadablePacketData
+    internal class NaClPacket : IPayloadablePacketData
     {
         private byte[] payload;
 
