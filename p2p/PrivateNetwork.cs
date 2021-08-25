@@ -3,43 +3,67 @@ using P2P.Internal;
 using P2P.Packets;
 using P2P.Packets.Structures.Address;
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+
+using Timer = System.Timers.Timer;
 
 namespace P2P
 {
     public class PrivateNetwork : IDisposable 
     {
         private UdpClient socket;
-        private SortedDictionary<UInt32, RemoteClient> clients = new SortedDictionary<UInt32, RemoteClient>();
-        private UInt32 myID;
+        private ConcurrentDictionary<UInt32, RemoteClient> clients = new ConcurrentDictionary<UInt32, RemoteClient>();
+        private UInt32 myPeerID;
         private NaCLKeyPair keyPair;
         private IPacketDissector adderssDissector = new AddressDissector();
-        private Timer helloTask;
+
+        internal Timer helloTask = new Timer();
+        internal Timer pingTask = new Timer();
+
+        private Thread readSocketThread;
 
         private IPEndPoint stunEndpoint;
+        private IPEndPoint externalEndpoint;
+        private IPEndPoint internalEndpoint;
 
-        private IPEndPoint externalIP;
+        internal NetworkConfig config = new NetworkConfig();
 
-        bool isRunned;
-
-        public IPEndPoint ExternalIP { get => externalIP; set => externalIP = value; }
+        public IPEndPoint ExternalEndpoint { get => externalEndpoint; }
+        public IPEndPoint InternalEndpoint { get => internalEndpoint; }
 
         public void Dispose()
         {
-            isRunned = true;
+            readSocketThread.Interrupt();
+            readSocketThread.Join();
+
             socket.Close();
 
-            helloTask.Dispose();
+            helloTask?.Dispose();
+            pingTask?.Dispose();
         }
 
-        private void ListenSocketThread()
+        public void Start()
         {
-            helloTask = new Timer(SendHelloTimerTask, this, 1000, 1000);
+            if (readSocketThread.IsAlive)
+                throw new InvalidOperationException("Already started");
 
-            while (isRunned)
+            readSocketThread = new Thread(ReadSocketThread);
+            readSocketThread.Start();
+
+            helloTask.Interval = config.HelloInterval;
+            pingTask.Interval = config.PingInterval;
+
+            helloTask.Start();
+            pingTask.Start();
+        }
+
+        private void ReadSocketThread()
+        {
+
+            while (readSocketThread.IsAlive)
             {
                 IPEndPoint from = null;
                 byte[] data = socket.Receive(ref from);
@@ -49,25 +73,17 @@ namespace P2P
 
                 if(from.Equals(this.stunEndpoint))
                 {
-                    IPEndPoint endPoint = STUNParser.ParseSTUNResponse(data);
-                    
-
+                    externalEndpoint = STUNParser.ParseSTUNResponse(data);
+                    this.stunEndpoint = null;
                 }
-
-                IDAdderss adderss = (IDAdderss)adderssDissector.Dissect(data);
-            }
-        }
-
-        private void SendHelloTimerTask(object state)
-        {
-            lock(clients)
-            {
-                foreach(var client in clients)
+                else if(this.myPeerID != 0)
                 {
-                    if(!client.Value.IsConnected)
-                        client.Value.PrepareHello();
-                    
-                    // TODO Check hello attemts
+                    IDAdderss adderss = (IDAdderss)adderssDissector.Dissect(data);
+
+                    RemoteClient client;
+
+                    if(clients.TryGetValue(adderss.FromID, out client))
+                        client.ProcessPacket(adderss, from);
                 }
             }
         }
@@ -75,7 +91,7 @@ namespace P2P
         internal void SendTo(byte[] data, IPEndPoint to)
         {
             IDAdderss adderssPacket = new IDAdderss();
-            adderssPacket.FromID = myID;
+            adderssPacket.FromID = myPeerID;
             adderssPacket.Payload = data;
 
             byte[] packet = adderssDissector.Assembly(adderssPacket);
@@ -83,14 +99,34 @@ namespace P2P
             socket.Send(packet, packet.Length, to);
         }
 
-        public void AddPeer(IPEndPoint endPoint, UInt32 peerID)
+        public void AddPeer(uint peerID, byte[] publicKey, IPEndPoint externalAddress, IPEndPoint internalAddress)
         {
-            //Todo refactoe me
 
-            clients.Add(peerID, new RemoteClient(endPoint, endPoint, peerID));
+            if (myPeerID == 0)
+                throw new InvalidOperationException("myPeerID");
+
+            RemoteClient.Builder builder = new RemoteClient.Builder();
+
+            builder
+                .AddID(peerID)
+                .AddAddEndpoint(externalAddress, internalAddress);
+
+            if(this.keyPair.privateKey != null)
+            {
+                builder.AddNacl(new Curve25519XSalsa20Poly1305(this.keyPair.privateKey, publicKey));
+                builder.AddNonceUtils(myPeerID > peerID, 5000, 0);
+            }
+
+            if (clients.TryAdd(peerID, builder.Build()))
+            {
+
+            }
+            else
+                throw new ArgumentException("peerID is dublicate");
+
         }
 
-        public void GetExternalIP(IPEndPoint stunServer)
+        public void ReceiveExternalIP(IPEndPoint stunServer)
         {
             byte[] data = STUNParser.CreateStunRequest(new byte[12]);
             socket.Send(data, data.Length, stunServer);
@@ -98,14 +134,36 @@ namespace P2P
             this.stunEndpoint = stunServer;
         }
 
+        public void ReceiveInternalIP()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (var ip in host.AddressList)
+            {
+                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    this.internalEndpoint = new IPEndPoint(ip, ((IPEndPoint)this.socket.Client.LocalEndPoint).Port);
+                    return;
+                }
+            }
+        }
+
         public class Builder
         {
             PrivateNetwork network = new PrivateNetwork();
             IPEndPoint endPoint;
 
+            NetworkConfig config = new NetworkConfig();
+
             public Builder()
             {
 
+            }
+
+            public Builder SetMaxHelloAttemts(int count)
+            {
+                config.MaxHelloAttemts = count;
+
+                return this;
             }
 
             public Builder AddNaCl(byte[] privateKey, byte[] publicKey )
@@ -127,7 +185,7 @@ namespace P2P
 
             public Builder AddID(uint id)
             {
-                network.myID = id;
+                network.myPeerID = id;
 
                 return this;
             }
@@ -141,9 +199,6 @@ namespace P2P
 
             public PrivateNetwork Build()
             {
-                if (network.myID == 0)
-                    throw new InvalidOperationException("ID required");
-
                 // Build Socket
 
                 if (endPoint != null)
@@ -154,12 +209,9 @@ namespace P2P
                 const int SIO_UDP_CONNRESET = -1744830452;
                 byte[] inValue = new byte[] { 0 };
                 byte[] outValue = new byte[] { 0 };
+
                 network.socket.Client.IOControl(SIO_UDP_CONNRESET, inValue, outValue);
-
-                network.isRunned = true;
-
-                Thread thr = new Thread(network.ListenSocketThread);
-                thr.Start();
+                network.config = config;
 
                 return network;
             }

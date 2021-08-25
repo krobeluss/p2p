@@ -1,6 +1,8 @@
 ﻿using NaCl;
 using P2P.Internal;
 using P2P.Packets;
+using P2P.Packets.Structures;
+using P2P.Packets.Structures.Common;
 using P2P.Packets.Structures.Encryption;
 using P2P.Packets.Structures.P2P;
 using System;
@@ -10,7 +12,7 @@ using System.Text;
 
 namespace P2P
 {
-    internal class RemoteClient
+    internal class RemoteClient : IDisposable
     {
         private IPEndPoint externalAddress;
         private IPEndPoint internalAddress;
@@ -21,10 +23,10 @@ namespace P2P
         private UInt32 remoteID;
         private int helloCount = 0;
 
-        IPacketDissector commonDissector;
-        IPacketDissector encryptionDissector;
+        private IPacketDissector commonDissector = new CommonDissector();
+        private IPacketDissector encryptionDissector;
 
-        NonceUtils nonceUtils;
+        private NonceUtils nonceUtils;
 
         public bool IsConnected
         {
@@ -34,46 +36,87 @@ namespace P2P
             }
         }
 
-        public RemoteClient(IPEndPoint externalAddress, IPEndPoint internalAddress, UInt32 remoteID)
+        private RemoteClient()
         {
-            this.externalAddress = externalAddress;
-            this.internalAddress = internalAddress;
-            this.remoteID = remoteID;
+
+        }
+
+        public void Dispose()
+        {
+            network.helloTask.Elapsed -= OnHello;
+            network.pingTask.Elapsed -= OnPing;
         }
 
         public void ProcessPacket(IPayloadablePacketData packet, IPEndPoint from)
         {
-            if (typeof(NaClDissector).IsInstanceOfType(this.encryptionDissector))
-            {
-                NaClPacket naClPacket = (NaClPacket)this.encryptionDissector.Dissect(packet.Payload);
+            byte[] packetData = Decrypt(packet);
 
-                if(this.nonceUtils.TrackNonce(naClPacket.Payload))
+            if (packetData != null)
+            {
+                correctAddress = from;
+
+                CommonLayer commonPacket = (CommonLayer)this.commonDissector.Dissect(packetData);
+
+                switch(commonPacket.Header)
                 {
-                    // Парсим дальше пейлоад 
-                }
-                else
-                {
-                    // Нонс был использован
+                    case CommonHeaderConstants.HELLO:
+                        break; // Todo get flags
+                    case CommonHeaderConstants.PING:
+                        Ping pingPacket = (Ping)commonPacket;
+
+                        Pong pongPacket = new Pong();
+                        pongPacket.Value = pingPacket.Value;
+
+                        Send(Encrypt(commonDissector.Assembly(pongPacket)));
+                        break;
                 }
             }
         }
 
-        internal void PrepareHello()
+        private void OnHello(object source, System.Timers.ElapsedEventArgs e)
         {
-            Hello helloPacket = new Hello(); // TODO hello флаги
+            if (this.IsConnected)
+                network.helloTask.Elapsed -= OnHello;
+            else
+            {
+                helloCount++;
+                SendHello();
+            }
+                
+        }
 
-            byte[] data = Encrypt( commonDissector.Assembly(helloPacket) );
-            
+        private void OnPing(object source, System.Timers.ElapsedEventArgs e)
+        {
+            if (this.IsConnected)
+                SendPing();
+        }
+
+        private void Send(byte[] data)
+        {
             if (correctAddress == null)
             {
-                network.SendTo(data, externalAddress);
-                network.SendTo(data, internalAddress);
+                network?.SendTo(data, externalAddress);
+                network?.SendTo(data, internalAddress);
             }
             else
                 network.SendTo(data, correctAddress);
         }
 
-        internal byte[] Encrypt(byte[] packetData)
+        internal void SendHello()
+        {
+            Hello helloPacket = new Hello(); // TODO hello флаги
+
+            Send(Encrypt(commonDissector.Assembly(helloPacket)));
+        }
+
+        internal void SendPing()
+        {
+            Ping pingPacket = new Ping(); // TODO hello флаги
+
+            Send(Encrypt(commonDissector.Assembly(pingPacket)));
+        }
+
+        private byte[] Encrypt(byte[] packetData)
         {
             if(typeof(NaClDissector).IsInstanceOfType(this.encryptionDissector))
             {
@@ -85,6 +128,63 @@ namespace P2P
             }
 
             return packetData; // Крипта отключена или неподдерживаемый диссектор диссектор
+        }
+
+        private byte[] Decrypt(IPayloadablePacketData packetData)
+        {
+            if (typeof(NaClDissector).IsInstanceOfType(this.encryptionDissector))
+            {
+                NaClPacket naClPacket = (NaClPacket)this.encryptionDissector.Dissect(packetData.Payload);
+
+                if (this.nonceUtils.TrackNonce(naClPacket.Payload))
+                    return naClPacket.Payload;
+                    
+            }
+
+            return null;
+        }
+
+        internal class Builder
+        {
+            private RemoteClient client = new RemoteClient();
+
+            private int nonceLength = 0;
+
+            public Builder()
+            {
+
+            }
+
+            public Builder AddID(UInt32 id)
+            {
+                client.remoteID = id;
+                return this;
+            }
+
+            public Builder AddNacl(Curve25519XSalsa20Poly1305 nacl)
+            {
+                client.encryptionDissector = new NaClDissector(nacl);
+                nonceLength = Curve25519XSalsa20Poly1305.NonceLength;
+                return this;
+            }
+
+            public Builder AddNonceUtils(bool even, int nonceLifetime, int timestampOffset)
+            {
+                client.nonceUtils = new NonceUtils(even, nonceLength, nonceLifetime, timestampOffset);
+                return this;
+            }
+
+            public Builder AddAddEndpoint(IPEndPoint externalAddress, IPEndPoint internalAddress)
+            {
+                client.externalAddress = externalAddress;
+                client.internalAddress = internalAddress;
+                return this;
+            }
+
+            public RemoteClient Build()
+            {
+                return client;
+            }
         }
     }
 }
