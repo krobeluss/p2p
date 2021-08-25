@@ -9,7 +9,7 @@ namespace P2P.Packets.Structures.P2P
     {
 
         private const int COMPRESSION_ENABLED = 1;
-        private const int LIVE_TCP = 1 << 1;
+        private const int PREFER_TCP = 1 << 1;
 
         public override byte Header => CommonHeaderConstants.HELLO;
 
@@ -32,15 +32,15 @@ namespace P2P.Packets.Structures.P2P
         {
             get
             {
-                return (flags & LIVE_TCP) == LIVE_TCP;
+                return (flags & PREFER_TCP) == PREFER_TCP;
             }
 
             set
             {
                 if (value)
-                    flags |= LIVE_TCP;
+                    flags |= PREFER_TCP;
                 else
-                    flags &= ~LIVE_TCP;
+                    flags &= ~PREFER_TCP;
             }
         }
 
@@ -60,10 +60,11 @@ namespace P2P.Packets.Structures.P2P
 
         public override byte[] Assembly()
         {
-            byte[] flags = BitConverter.GetBytes(this.flags);
-            Array.Reverse(flags);
+            MemoryStream ms = new MemoryStream();
+            BinaryWriter bw = new BinaryWriter(ms);
+            bw.Write(flags);
 
-            return flags;
+            return ms.ToArray();
         }
     }
 }

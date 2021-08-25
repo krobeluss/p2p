@@ -1,4 +1,5 @@
-﻿using P2P.Packets.Structures.P2P;
+﻿using P2P.Packets.Structures.Common;
+using P2P.Packets.Structures.P2P;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -19,8 +20,6 @@ namespace P2P.Packets.Structures
                 Array.Copy(subPacketData, 0, packetData, 1, subPacketData.Length);
 
                 return packetData;
-
-                
             }
 
             throw new ArgumentException();
@@ -33,9 +32,12 @@ namespace P2P.Packets.Structures
          
             switch (data[0])
             {
-                
                 case CommonHeaderConstants.HELLO:
                     return new Hello(subPacketData);
+                case CommonHeaderConstants.PING:
+                    return new Ping(subPacketData);
+                case CommonHeaderConstants.PONG:
+                    return new Pong(subPacketData);
             }
 
             return null;
