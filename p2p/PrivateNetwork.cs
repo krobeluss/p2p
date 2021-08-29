@@ -4,6 +4,7 @@ using P2P.Packets;
 using P2P.Packets.Structures.Address;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -33,6 +34,16 @@ namespace P2P
 
         public IPEndPoint ExternalEndpoint { get => externalEndpoint; }
         public IPEndPoint InternalEndpoint { get => internalEndpoint; }
+        public byte[] PublicKey { get => keyPair.publicKey; }
+        public uint MyPeerID
+        {
+            get => myPeerID; set
+            {
+                if (myPeerID != 0)
+                    throw new InvalidOperationException("myPeerID cant change");
+                myPeerID = value;
+            }
+        }
 
         public void Dispose()
         {
@@ -43,11 +54,19 @@ namespace P2P
 
             helloTask?.Dispose();
             pingTask?.Dispose();
+
+            foreach(KeyValuePair<uint, RemoteClient> client in clients)
+            {
+                client.Value.Dispose();
+            }
+
+            clients.Clear();
+
         }
 
         public void Start()
         {
-            if (readSocketThread.IsAlive)
+            if (readSocketThread != null && readSocketThread.IsAlive)
                 throw new InvalidOperationException("Already started");
 
             readSocketThread = new Thread(ReadSocketThread);
@@ -73,7 +92,16 @@ namespace P2P
 
                 if(from.Equals(this.stunEndpoint))
                 {
-                    externalEndpoint = STUNParser.ParseSTUNResponse(data);
+                    try
+                    {
+                        externalEndpoint = STUNParser.ParseSTUNResponse(data);
+                    }
+                    catch (Exception e)
+                    {
+
+                    }
+
+                   
                     this.stunEndpoint = null;
                 }
                 else if(this.myPeerID != 0)
@@ -103,9 +131,13 @@ namespace P2P
         {
 
             if (myPeerID == 0)
-                throw new InvalidOperationException("myPeerID");
+                return;
+            //throw new InvalidOperationException("myPeerID");
 
-            RemoteClient.Builder builder = new RemoteClient.Builder();
+
+            Console.WriteLine("New peer " + internalAddress + " " + externalAddress + " with ID " + peerID);
+
+            RemoteClient.Builder builder = new RemoteClient.Builder(this);
 
             builder
                 .AddID(peerID)
@@ -114,7 +146,7 @@ namespace P2P
             if(this.keyPair.privateKey != null)
             {
                 builder.AddNacl(new Curve25519XSalsa20Poly1305(this.keyPair.privateKey, publicKey));
-                builder.AddNonceUtils(myPeerID > peerID, 5000, 0);
+                builder.AddNonceUtils(myPeerID > peerID, 60000, 0);
             }
 
             if (clients.TryAdd(peerID, builder.Build()))
@@ -124,6 +156,21 @@ namespace P2P
             else
                 throw new ArgumentException("peerID is dublicate");
 
+        }
+
+        public bool RemovePeer(UInt32 peerID)
+        {
+            RemoteClient peer;
+
+            if (clients.TryRemove(peerID, out peer))
+            {
+                
+                peer.Dispose();
+
+                return true;
+            }
+
+            return false;
         }
 
         public void ReceiveExternalIP(IPEndPoint stunServer)

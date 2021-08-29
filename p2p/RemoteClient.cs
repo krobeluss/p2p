@@ -16,8 +16,8 @@ namespace P2P
     {
         private IPEndPoint externalAddress;
         private IPEndPoint internalAddress;
-
         private IPEndPoint correctAddress;
+
         private PrivateNetwork network;
 
         private UInt32 remoteID;
@@ -27,6 +27,8 @@ namespace P2P
         private IPacketDissector encryptionDissector;
 
         private NonceUtils nonceUtils;
+
+        private PeerConfig peerConfig;
 
         public bool IsConnected
         {
@@ -49,40 +51,65 @@ namespace P2P
 
         public void ProcessPacket(IPayloadablePacketData packet, IPEndPoint from)
         {
-            byte[] packetData = Decrypt(packet);
 
-            if (packetData != null)
+            try
             {
-                correctAddress = from;
+                byte[] packetData = Decrypt(packet);
 
-                CommonLayer commonPacket = (CommonLayer)this.commonDissector.Dissect(packetData);
-
-                switch(commonPacket.Header)
+                if (packetData != null)
                 {
-                    case CommonHeaderConstants.HELLO:
-                        break; // Todo get flags
-                    case CommonHeaderConstants.PING:
-                        Ping pingPacket = (Ping)commonPacket;
+                    correctAddress = from;
 
-                        Pong pongPacket = new Pong();
-                        pongPacket.Value = pingPacket.Value;
+                    CommonLayer commonPacket = (CommonLayer)this.commonDissector.Dissect(packetData);
 
-                        Send(Encrypt(commonDissector.Assembly(pongPacket)));
-                        break;
+                    switch (commonPacket.Header)
+                    {
+                        case CommonHeaderConstants.HELLO:
+                            Console.WriteLine("Hello from " + remoteID + " " + from);
+
+                            Hello hello = (Hello)commonPacket;
+
+                            if (peerConfig == null)                                
+                                peerConfig = new PeerConfig();
+
+
+                            if (hello.RemoteHelloReceived)
+                                network.helloTask.Elapsed -= OnHello;
+
+                            if(!hello.AnswerHello)
+                                SendHello(true);
+
+                            break; // Todo get flags
+                        case CommonHeaderConstants.PING:
+                            Ping pingPacket = (Ping)commonPacket;
+
+                            Pong pongPacket = new Pong();
+                            pongPacket.Value = pingPacket.Value;
+
+                            Send(Encrypt(commonDissector.Assembly(pongPacket)));
+                            break;
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                Console.WriteLine(from);
+                Console.WriteLine(ex.ToString());
+            }
+
+            
         }
 
         private void OnHello(object source, System.Timers.ElapsedEventArgs e)
         {
-            if (this.IsConnected)
-                network.helloTask.Elapsed -= OnHello;
-            else
-            {
-                helloCount++;
-                SendHello();
-            }
-                
+            helloCount++;
+            SendHello(false);  
+        }
+
+        internal void initTimers()
+        {
+            network.helloTask.Elapsed += OnHello;
+            network.pingTask.Elapsed += OnPing;
         }
 
         private void OnPing(object source, System.Timers.ElapsedEventArgs e)
@@ -102,9 +129,11 @@ namespace P2P
                 network.SendTo(data, correctAddress);
         }
 
-        internal void SendHello()
+        internal void SendHello(bool answer)
         {
             Hello helloPacket = new Hello(); // TODO hello флаги
+            helloPacket.RemoteHelloReceived = peerConfig != null;
+            helloPacket.AnswerHello = answer;
 
             Send(Encrypt(commonDissector.Assembly(helloPacket)));
         }
@@ -124,7 +153,10 @@ namespace P2P
                 naClPacket.Nonce = nonceUtils.GetNextNonce();
                 naClPacket.Payload = packetData;
 
-                return this.encryptionDissector.Assembly(naClPacket);
+                byte[] returnData = this.encryptionDissector.Assembly(naClPacket);
+                this.encryptionDissector.Dissect(returnData);
+
+                return returnData;
             }
 
             return packetData; // Крипта отключена или неподдерживаемый диссектор диссектор
@@ -136,7 +168,7 @@ namespace P2P
             {
                 NaClPacket naClPacket = (NaClPacket)this.encryptionDissector.Dissect(packetData.Payload);
 
-                if (this.nonceUtils.TrackNonce(naClPacket.Payload))
+                if (this.nonceUtils.TrackNonce(naClPacket.Nonce))
                     return naClPacket.Payload;
                     
             }
@@ -150,9 +182,9 @@ namespace P2P
 
             private int nonceLength = 0;
 
-            public Builder()
+            public Builder(PrivateNetwork network)
             {
-
+                client.network = network;
             }
 
             public Builder AddID(UInt32 id)
@@ -183,6 +215,7 @@ namespace P2P
 
             public RemoteClient Build()
             {
+                client.initTimers();
                 return client;
             }
         }

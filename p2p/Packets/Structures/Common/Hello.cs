@@ -10,6 +10,8 @@ namespace P2P.Packets.Structures.P2P
 
         private const int COMPRESSION_ENABLED = 1;
         private const int PREFER_TCP = 1 << 1;
+        private const int REMOTE_HELLO_RECIVED =  1 << 2;
+        private const int ANSWER_HELLO = 1 << 3;
 
         public override byte Header => CommonHeaderConstants.HELLO;
 
@@ -41,6 +43,38 @@ namespace P2P.Packets.Structures.P2P
                     flags |= PREFER_TCP;
                 else
                     flags &= ~PREFER_TCP;
+            }
+        }
+
+        public bool RemoteHelloReceived
+        {
+            get
+            {
+                return (flags & REMOTE_HELLO_RECIVED) == REMOTE_HELLO_RECIVED;
+            }
+
+            set
+            {
+                if (value)
+                    flags |= REMOTE_HELLO_RECIVED;
+                else
+                    flags &= ~REMOTE_HELLO_RECIVED;
+            }
+        }
+
+        public bool AnswerHello
+        {
+            get
+            {
+                return (flags & ANSWER_HELLO) == ANSWER_HELLO;
+            }
+
+            set
+            {
+                if (value)
+                    flags |= ANSWER_HELLO;
+                else
+                    flags &= ~ANSWER_HELLO;
             }
         }
 

@@ -45,8 +45,8 @@ namespace P2P.Internal
             if (nonce.Length != nonceSize)
                 throw new ArgumentException("Illegal nonce array size");
 
-            if (usedNonces.Contains(nonce)) 
-                return false; // Nonce used
+            if (usedNonces.Contains(nonce))
+                throw new Exception("Nonce used");
 
             MemoryStream ms = new MemoryStream(nonce);
             BinaryReader br = new BinaryReader(ms);
@@ -55,7 +55,7 @@ namespace P2P.Internal
             Int64 genarationTimestamp = br.ReadInt64();
 
             if (genarationTimestamp + nonceLifeTimme < DateTimeOffset.Now.ToUnixTimeMilliseconds() + timestampOffset)
-                return false; // Nonce expired
+                throw new Exception("Nonce expired");
 
             usedNonces.Add(nonce);
             return true;

@@ -24,7 +24,9 @@ namespace P2P.Packets.Structures.Encryption
                 byte[] data = new byte[Curve25519XSalsa20Poly1305.NonceLength + Curve25519XSalsa20Poly1305.TagLength + naclPacket.Payload.Length];
 
                 Array.Copy(naclPacket.Nonce, data, Curve25519XSalsa20Poly1305.NonceLength);
-                cryptor.Encrypt(data, Curve25519XSalsa20Poly1305.NonceLength, naclPacket.Payload, 0, naclPacket.Payload.Length, naclPacket.Nonce, 0);
+
+                lock(cryptor)
+                    cryptor.Encrypt(data, Curve25519XSalsa20Poly1305.NonceLength, naclPacket.Payload, 0, naclPacket.Payload.Length, naclPacket.Nonce, 0);
 
                 return data;
             }
@@ -41,9 +43,13 @@ namespace P2P.Packets.Structures.Encryption
 
             //byte[] message, int messageOffset, byte[] cipher, int cipherOffset, int cipherCount, byte[] nonce, int nonceOffset
 
-            bool success = cryptor.TryDecrypt(message, 0, data, Curve25519XSalsa20Poly1305.NonceLength, data.Length - Curve25519XSalsa20Poly1305.NonceLength, nonce, 0);
+            bool success;
 
-            if(success)
+            lock (cryptor)
+                success = cryptor.TryDecrypt(message, 0, data, Curve25519XSalsa20Poly1305.NonceLength, data.Length - Curve25519XSalsa20Poly1305.NonceLength, nonce, 0);
+
+
+            if (success)
             {
                 NaClPacket structure = new NaClPacket();
                 structure.Nonce = nonce;
@@ -51,6 +57,7 @@ namespace P2P.Packets.Structures.Encryption
 
                 return structure;
             }
+            
 
             throw new CryptographicException();
         }
