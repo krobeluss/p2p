@@ -35,6 +35,8 @@ namespace P2P
         public IPEndPoint ExternalEndpoint { get => externalEndpoint; }
         public IPEndPoint InternalEndpoint { get => internalEndpoint; }
         public byte[] PublicKey { get => keyPair.publicKey; }
+
+        private ConcurrentDictionary<int, VirtualUdpSocket> openedUdpSockets = new ConcurrentDictionary<int, VirtualUdpSocket>();
         public uint MyPeerID
         {
             get => myPeerID; set
@@ -113,6 +115,8 @@ namespace P2P
                     if(clients.TryGetValue(adderss.FromID, out client))
                         client.ProcessPacket(adderss, from);
                 }
+
+
             }
         }
 
@@ -194,6 +198,48 @@ namespace P2P
             }
         }
 
+        internal void SendVirtualUdpPacket(int fromPort, VirtualEndpoint to, byte[] data)
+        {
+            RemoteClient client;
+
+            if(to.Id == int.MaxValue)
+            {
+                foreach (var i in clients)
+                {
+                    i.Value.SendUdpPacket(fromPort, to.Port, data);
+                }
+                    
+            }
+            else if(clients.TryGetValue(to.Id, out client))
+            {
+                client.SendUdpPacket(fromPort, to.Port, data);
+            }
+        }
+
+        internal void ProcessUdpPacket(VirtualEndpoint from, int toPort, byte[] data)
+        {
+            VirtualUdpSocket socket;
+
+            if(openedUdpSockets.TryGetValue(toPort, out socket))
+            {
+                socket.incomingPackets.Add(new KeyValuePair<VirtualEndpoint, byte[]>(from, data));
+            }
+        }
+
+        public VirtualUdpSocket OpenUdpSocket(int port)
+        {
+            VirtualUdpSocket socket = new VirtualUdpSocket();
+            socket.network = this;
+
+            socket.incomingPackets = new BlockingCollection<KeyValuePair<VirtualEndpoint, byte[]>>(new ConcurrentQueue<KeyValuePair<VirtualEndpoint, byte[]>>(), 500);
+
+            if (openedUdpSockets.TryAdd(port, socket))
+                return socket;
+            else
+                throw new SocketException();
+
+        }
+
         public class Builder
         {
             PrivateNetwork network = new PrivateNetwork();
@@ -259,6 +305,8 @@ namespace P2P
 
                 network.socket.Client.IOControl(SIO_UDP_CONNRESET, inValue, outValue);
                 network.config = config;
+
+                network.socket.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReceiveBuffer, 5 * 1024 * 1024);
 
                 return network;
             }

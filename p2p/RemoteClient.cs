@@ -65,8 +65,6 @@ namespace P2P
                     switch (commonPacket.Header)
                     {
                         case CommonHeaderConstants.HELLO:
-                            Console.WriteLine("Hello from " + remoteID + " " + from);
-
                             Hello hello = (Hello)commonPacket;
 
                             if (peerConfig == null)                                
@@ -87,6 +85,11 @@ namespace P2P
                             pongPacket.Value = pingPacket.Value;
 
                             Send(Encrypt(commonDissector.Assembly(pongPacket)));
+                            break;
+
+                        case CommonHeaderConstants.UDP_DATA:
+                            UdpData udpData = (UdpData)commonPacket;
+                            network.ProcessUdpPacket(new VirtualEndpoint(remoteID, udpData.FromPort),  udpData.ToPort, udpData.Payload);
                             break;
                     }
                 }
@@ -129,20 +132,25 @@ namespace P2P
                 network.SendTo(data, correctAddress);
         }
 
+        private void Send(CommonLayer commonPacket)
+        {
+            Send(Encrypt(commonDissector.Assembly(commonPacket)));
+        }
+
         internal void SendHello(bool answer)
         {
             Hello helloPacket = new Hello(); // TODO hello флаги
             helloPacket.RemoteHelloReceived = peerConfig != null;
             helloPacket.AnswerHello = answer;
 
-            Send(Encrypt(commonDissector.Assembly(helloPacket)));
+            Send(helloPacket);
         }
 
         internal void SendPing()
         {
             Ping pingPacket = new Ping(); // TODO hello флаги
 
-            Send(Encrypt(commonDissector.Assembly(pingPacket)));
+            Send(pingPacket);
         }
 
         private byte[] Encrypt(byte[] packetData)
@@ -174,6 +182,16 @@ namespace P2P
             }
 
             return null;
+        }
+
+        internal void SendUdpPacket(int fromPort, int toPort, byte[] data)
+        {
+            UdpData udpData = new UdpData();
+            udpData.FromPort = fromPort;
+            udpData.ToPort = toPort;
+            udpData.Payload = data;
+
+            Send(udpData);
         }
 
         internal class Builder

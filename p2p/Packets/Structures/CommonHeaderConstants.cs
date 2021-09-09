@@ -9,5 +9,6 @@ namespace P2P.Packets.Structures
         public const byte HELLO = 1;
         public const byte PING = 2;
         public const byte PONG = 3;
+        public const byte UDP_DATA = 4;
     }
 }

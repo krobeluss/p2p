@@ -38,6 +38,8 @@ namespace P2P.Packets.Structures
                     return new Ping(subPacketData);
                 case CommonHeaderConstants.PONG:
                     return new Pong(subPacketData);
+                case CommonHeaderConstants.UDP_DATA:
+                    return new UdpData(subPacketData);
             }
 
             return null;
