@@ -194,6 +194,11 @@ namespace P2P
             Send(udpData);
         }
 
+        internal void SendTcpPacket(TcpData data)
+        {
+            Send(data);
+        }
+
         internal class Builder
         {
             private RemoteClient client = new RemoteClient();

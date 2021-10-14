@@ -2,6 +2,7 @@
 using P2P.Internal;
 using P2P.Packets;
 using P2P.Packets.Structures.Address;
+using P2P.Packets.Structures.Common;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -37,6 +38,11 @@ namespace P2P
         public byte[] PublicKey { get => keyPair.publicKey; }
 
         private ConcurrentDictionary<int, VirtualUdpSocket> openedUdpSockets = new ConcurrentDictionary<int, VirtualUdpSocket>();
+
+        private Dictionary<UInt16, Object> openedTcpSockets = new Dictionary<UInt16, Object>();
+
+        private ReaderWriterLockSlim tcpSocketsLock = new ReaderWriterLockSlim();
+
         public uint MyPeerID
         {
             get => myPeerID; set
@@ -198,6 +204,21 @@ namespace P2P
             }
         }
 
+        internal void SendVirtualTcpPacket(TcpData data, uint to)
+        {
+            RemoteClient client;
+
+            if (to == 0)
+            {
+                ProcessTcpPacket(data, 0);
+            }
+            else if (clients.TryGetValue(to, out client))
+            {
+                Console.WriteLine( myPeerID + "." + data.FromPort + " -> " + to + "." + data.ToPort + " [" + (data.SynFlag ? "S" : "") + (data.AckFlag ? "A" : "") + (data.FinFlag ? "F" : "") + (data.RstFlag ? "R" : "") + "] Seq = " + data.Seq + " Ack = " + data.Ack + " Len = " + (data.Payload == null ? 0 : data.Payload.Length) );
+                client.SendTcpPacket(data);
+            }
+        }
+
         internal void SendVirtualUdpPacket(int fromPort, VirtualEndpoint to, byte[] data)
         {
             RemoteClient client;
@@ -209,6 +230,10 @@ namespace P2P
                     i.Value.SendUdpPacket(fromPort, to.Port, data);
                 }
                     
+            }
+            else if (to.Id == 0)
+            {
+                ProcessUdpPacket(new VirtualEndpoint(0, fromPort), fromPort, data);
             }
             else if(clients.TryGetValue(to.Id, out client))
             {
@@ -226,6 +251,21 @@ namespace P2P
             }
         }
 
+        internal void ProcessTcpPacket(TcpData data, uint from)
+        {
+
+            if (from != 0)
+                Console.WriteLine(from + "." + data.FromPort + " -> " + myPeerID + "." + data.ToPort + " [" + (data.SynFlag ? "S" : "") + (data.AckFlag ? "A" : "") + (data.FinFlag ? "F" : "") + (data.RstFlag ? "R" : "") + "] Seq = " + data.Seq + " Ack = " + data.Ack + " Len = " + (data.Payload == null ? 0 : data.Payload.Length) );
+            else
+                Console.WriteLine(0 + "." + data.FromPort + " -> " + 0 + "." + data.ToPort + " [" + (data.SynFlag ? "S" : "") + (data.AckFlag ? "A" : "") + (data.FinFlag ? "F" : "") + (data.RstFlag ? "R" : "") + "] Seq = " + data.Seq + " Ack = " + data.Ack + " Len = " + (data.Payload == null ? 0 : data.Payload.Length) );
+
+            VirtualEndpoint remoteEndpoint = new VirtualEndpoint(from, data.FromPort);
+
+            IVirtualTcpSocket socket = GetSocket(data.ToPort, remoteEndpoint);
+
+            socket.ProcessFrame(data, remoteEndpoint);
+        }
+
         public VirtualUdpSocket OpenUdpSocket(int port)
         {
             VirtualUdpSocket socket = new VirtualUdpSocket();
@@ -238,6 +278,192 @@ namespace P2P
             else
                 throw new SocketException();
 
+        }
+
+        public VirtualTcpClient OpenTcpClient(VirtualEndpoint remoteClient)
+        {
+            if (remoteClient.Port == 0)
+                throw new Exception("Invalid port");
+
+            try
+            {
+                tcpSocketsLock.EnterWriteLock();
+
+                for(int i = config.StartDynamicTcpPortRange; i < config.StartDynamicTcpPortRange + config.DynamicTcpPortCount; ++i)
+                {
+                    if(!openedTcpSockets.ContainsKey((ushort)i))
+                    {
+                        VirtualTcpClient newClient = new VirtualTcpClient((ushort)i, remoteClient, this);
+                        openedTcpSockets.Add((ushort)i, newClient);
+
+                        return newClient;
+                    }
+                }
+            }
+            finally
+            {
+                tcpSocketsLock.ExitWriteLock();
+            }
+
+            throw new SocketException();
+        }
+
+        public VirtualTcpClient OpenTcpClient(VirtualEndpoint remoteEndpoint, UInt16 localPort)
+        {
+            return OpenTcpClient(remoteEndpoint, localPort, false);
+        }
+
+        public VirtualTcpClient OpenTcpClient(VirtualEndpoint remoteEndpoint, UInt16 localPort, bool reuseLocalPort)
+        {
+            if (localPort == 0 || remoteEndpoint.Port == 0)
+                throw new Exception("Invalid port");
+
+            tcpSocketsLock.EnterWriteLock();
+
+            object value;
+
+            bool contains = openedTcpSockets.TryGetValue(localPort, out value);
+
+            try
+            {
+                if (contains)
+                {
+                    if (typeof(Dictionary<VirtualEndpoint, IVirtualTcpSocket>).IsInstanceOfType(value))
+                    {
+                        Dictionary<VirtualEndpoint, IVirtualTcpSocket> reuseSockets = (Dictionary<VirtualEndpoint, IVirtualTcpSocket>)value;
+
+                        if (reuseSockets.ContainsKey(remoteEndpoint))
+                            throw new SocketException(10048);
+
+                        if (!reuseLocalPort)
+                            throw new SocketException(10048);
+                        else
+                        {
+                            VirtualTcpClient newClient = new VirtualTcpClient(localPort, remoteEndpoint, this);
+                            reuseSockets.Add(remoteEndpoint, newClient);
+
+                            return newClient;
+                        }
+                            
+                    }
+                    else
+                    {
+                        // Уже заюзано
+
+                        throw new SocketException(10048);
+                    }
+                }
+                else
+                {
+                    if (reuseLocalPort)
+                    {
+                        Dictionary<VirtualEndpoint, VirtualTcpClient> reuseSockets = new Dictionary<VirtualEndpoint, VirtualTcpClient>();
+                        VirtualTcpClient newClient = new VirtualTcpClient(localPort, remoteEndpoint, this);
+
+                        reuseSockets.Add(remoteEndpoint, newClient);
+                        openedTcpSockets.Add(localPort, reuseSockets);
+
+                        return newClient;
+                    }
+                    else
+                    {
+                        VirtualTcpClient newClient = new VirtualTcpClient(localPort, remoteEndpoint, this);
+                        openedTcpSockets.Add(localPort, newClient);
+
+                        return newClient;
+                    }
+                        
+                }
+            }
+            finally
+            {
+                tcpSocketsLock.ExitWriteLock();
+            }
+
+            //throw new Exception("Bug exceprion");
+        }
+
+        public VirtualTcpServer OpenTcpServer(UInt16 localPort)
+        { 
+            if (localPort == 0 )
+                throw new Exception("Invalid port");
+
+            tcpSocketsLock.EnterWriteLock();
+
+            object value;
+
+            bool contains = openedTcpSockets.TryGetValue(localPort, out value);
+
+            try
+            {
+                if (!contains)
+                {
+                    VirtualTcpServer newClient = new VirtualTcpServer(localPort, this);
+
+                    Dictionary<VirtualEndpoint, IVirtualTcpSocket> sockets = new Dictionary<VirtualEndpoint, IVirtualTcpSocket>();
+
+                    sockets.Add( VirtualEndpoint.ANY, newClient );
+
+                    openedTcpSockets.Add(localPort, sockets);
+
+                    return newClient;
+                }
+                else
+                    throw new SocketException(10048);
+
+            }
+            finally
+            {
+                tcpSocketsLock.ExitWriteLock();
+            }
+        }
+
+
+
+        internal IVirtualTcpSocket GetSocket( ushort localPort, VirtualEndpoint remote)
+        {
+            tcpSocketsLock.EnterReadLock();
+
+            object value;
+
+            bool contains = openedTcpSockets.TryGetValue(localPort, out value);
+
+            try
+            {
+                if (contains)
+                {
+                    if (typeof(Dictionary<VirtualEndpoint, IVirtualTcpSocket>).IsInstanceOfType(value))
+                    {
+                        Dictionary<VirtualEndpoint, IVirtualTcpSocket> sockets = (Dictionary<VirtualEndpoint, IVirtualTcpSocket>)value;
+
+                        IVirtualTcpSocket socket;
+
+                        sockets.TryGetValue(remote, out socket);
+
+                        if(socket == null)
+                            sockets.TryGetValue(VirtualEndpoint.ANY, out socket);
+
+                        return socket;
+                    }
+                    else
+                    {
+                        IVirtualTcpSocket socket = (IVirtualTcpSocket)value;
+
+                        VirtualTcpClient client = (VirtualTcpClient)socket;
+
+                        if(client.remoteEndpoint.Equals(remote))
+                            return socket;
+                    }
+                }
+
+                return null;
+            }
+            finally
+            {
+                tcpSocketsLock.ExitReadLock();
+            }
+
+ 
         }
 
         public class Builder
