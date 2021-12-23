@@ -9,7 +9,6 @@ namespace P2P.Packets.Structures.P2P
     {
 
         private const int COMPRESSION_ENABLED = 1;
-        private const int PREFER_TCP = 1 << 1;
         private const int REMOTE_HELLO_RECIVED =  1 << 2;
         private const int ANSWER_HELLO = 1 << 3;
 
@@ -27,22 +26,6 @@ namespace P2P.Packets.Structures.P2P
                     flags |= COMPRESSION_ENABLED;
                 else
                     flags &= ~COMPRESSION_ENABLED;
-            }
-        }
-
-        public bool LiveTcp
-        {
-            get
-            {
-                return (flags & PREFER_TCP) == PREFER_TCP;
-            }
-
-            set
-            {
-                if (value)
-                    flags |= PREFER_TCP;
-                else
-                    flags &= ~PREFER_TCP;
             }
         }
 

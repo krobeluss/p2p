@@ -20,7 +20,7 @@ namespace P2P
 
         private PrivateNetwork network;
 
-        private UInt32 remoteID;
+        private UInt32 peerId;
         private int helloCount = 0;
 
         private IPacketDissector commonDissector = new CommonDissector();
@@ -30,6 +30,23 @@ namespace P2P
 
         private PeerConfig peerConfig;
 
+        //
+        // STATS
+        //
+
+        private long lastDataReceiveTime;
+        private long lastPacketReveiveTime;
+        private long bytesSended;
+        private long bytesReceived;
+        private int compressionRatio;
+        private int speed;
+        private int ping;
+
+        private long speedSum;
+        private long lastSpeedMove;
+
+        private IList<int> pings;
+
         public bool IsConnected
         {
             get
@@ -37,6 +54,14 @@ namespace P2P
                 return correctAddress != null;
             }
         }
+
+        public long LastDataReceiveTime { get => lastDataReceiveTime; }
+        public long LastPacketReveiveTime { get => lastPacketReveiveTime; }
+        public long BytesSended { get => bytesSended; }
+        public long BytesReceived { get => bytesReceived; }
+        public int CompressionRatio { get => compressionRatio; }
+        public int Speed { get => speed; }
+        public int Ping { get => ping; }
 
         private RemoteClient()
         {
@@ -51,10 +76,13 @@ namespace P2P
 
         public void ProcessPacket(IPayloadablePacketData packet, IPEndPoint from)
         {
-
             try
             {
                 byte[] packetData = Decrypt(packet);
+
+                lastPacketReveiveTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                bytesReceived += packet.Payload.Length;
+
 
                 if (packetData != null)
                 {
@@ -69,7 +97,6 @@ namespace P2P
 
                             if (peerConfig == null)                                
                                 peerConfig = new PeerConfig();
-
 
                             if (hello.RemoteHelloReceived)
                                 network.helloTask.Elapsed -= OnHello;
@@ -86,11 +113,13 @@ namespace P2P
 
                             Send(Encrypt(commonDissector.Assembly(pongPacket)));
                             break;
+                        case CommonHeaderConstants.DATA:
+                            lastDataReceiveTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-                        case CommonHeaderConstants.UDP_DATA:
-                            UdpData udpData = (UdpData)commonPacket;
-                            network.ProcessUdpPacket(new VirtualEndpoint(remoteID, udpData.FromPort),  udpData.ToPort, udpData.Payload);
+                            // TODO process data packet
+
                             break;
+
                     }
                 }
             }
@@ -99,8 +128,6 @@ namespace P2P
                 Console.WriteLine(from);
                 Console.WriteLine(ex.ToString());
             }
-
-            
         }
 
         private void OnHello(object source, System.Timers.ElapsedEventArgs e)
@@ -123,6 +150,8 @@ namespace P2P
 
         private void Send(byte[] data)
         {
+            bytesSended += data.Length;
+
             if (correctAddress == null)
             {
                 network?.SendTo(data, externalAddress);
@@ -132,7 +161,7 @@ namespace P2P
                 network.SendTo(data, correctAddress);
         }
 
-        private void Send(CommonLayer commonPacket)
+        internal void Send(CommonLayer commonPacket)
         {
             Send(Encrypt(commonDissector.Assembly(commonPacket)));
         }
@@ -184,21 +213,6 @@ namespace P2P
             return null;
         }
 
-        internal void SendUdpPacket(int fromPort, int toPort, byte[] data)
-        {
-            UdpData udpData = new UdpData();
-            udpData.FromPort = fromPort;
-            udpData.ToPort = toPort;
-            udpData.Payload = data;
-
-            Send(udpData);
-        }
-
-        internal void SendTcpPacket(TcpData data)
-        {
-            Send(data);
-        }
-
         internal class Builder
         {
             private RemoteClient client = new RemoteClient();
@@ -212,7 +226,7 @@ namespace P2P
 
             public Builder AddID(UInt32 id)
             {
-                client.remoteID = id;
+                client.peerId = id;
                 return this;
             }
 
